@@ -117,3 +117,10 @@ public sealed class SettingsTests : IDisposable
         Assert.Equal("large", s.TextSize);
     }
 }
+
+public class SettingsSerializationTests
+{
+    [Fact]
+    public void Computed_values_are_not_written_to_the_file() =>
+        Assert.DoesNotContain("resolvedFolder", S1Panel.Core.Config.SettingsStore.Serialize(new S1Panel.Core.Config.PanelSettings()));
+}

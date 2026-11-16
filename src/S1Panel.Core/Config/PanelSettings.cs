@@ -21,6 +21,26 @@ public sealed class LedSettings
     public string? Port { get; set; }
 }
 
+/// <summary>Photo slideshow widget settings.</summary>
+public sealed class SlideshowSettings
+{
+    /// <summary>Folder of pictures (subfolders included), or null for your Pictures folder.</summary>
+    public string? Folder { get; set; }
+
+    /// <summary>Seconds per photo. Each change costs about a second of panel bandwidth, so keep it relaxed.</summary>
+    public int IntervalSeconds { get; set; } = 30;
+
+    public bool Shuffle { get; set; } = true;
+
+    /// <summary>cover (crop to fill) | contain (show the whole picture)</summary>
+    public string Fit { get; set; } = "cover";
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string ResolvedFolder => string.IsNullOrWhiteSpace(Folder)
+        ? Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)
+        : Environment.ExpandEnvironmentVariables(Folder);
+}
+
 /// <summary>
 /// Everything that can live in s1panel.json. Values are kept as the same strings the command line accepts
 /// ("auto", "larger", "portrait"...), so the file and the CLI share one vocabulary.
@@ -51,6 +71,14 @@ public sealed class PanelSettings
     /// <summary>Drive whose usage is shown.</summary>
     public string Drive { get; set; } = "C:";
 
+    /// <summary>For weather and sunrise/sunset: "auto" (Windows location), a ZIP/postal code, a place name, or "lat,lon".</summary>
+    public string Location { get; set; } = "auto";
+
+    public SlideshowSettings Slideshow { get; set; } = new();
+
+    /// <summary>The two widgets of the split layout: left/top then right/bottom (see WidgetRegistry).</summary>
+    public string[] Widgets { get; set; } = ["clock", "cpu-ram"];
+
     /// <summary>Scene layout artwork: autumn | winter | spring | summer | auto (follows the calendar).</summary>
     public string Scene { get; set; } = "auto";
 
@@ -78,6 +106,14 @@ public sealed class PanelSettings
         Check("units", () => ParseFahrenheit(Units));
         Check("textSize", () => LayoutExtensions.ParseTextSize(TextSize));
         Check("scene", () => SceneArt.Parse(Scene));
+        if (string.IsNullOrWhiteSpace(Location)) throw new ArgumentException("location must be auto, a ZIP code, a place, or lat,lon.");
+        Slideshow ??= new SlideshowSettings();
+        if (Slideshow.IntervalSeconds is < 5 or > 86_400) throw new ArgumentException("slideshow.intervalSeconds must be 5..86400.");
+        if (Slideshow.Fit is not ("cover" or "contain")) throw new ArgumentException("slideshow.fit must be cover or contain.");
+        if (Widgets is not { Length: 2 })
+            throw new ArgumentException($"widgets must list exactly two widgets (got {Widgets?.Length ?? 0}).");
+        foreach (string w in Widgets)
+            Check("widgets", () => S1Panel.Core.Rendering.Widgets.WidgetRegistry.Create(w));
         if (IntervalMs is < 100 or > 3_600_000) throw new ArgumentException("intervalMs must be 100..3600000.");
         if (UpdateGapMs is < 0 or > 1000) throw new ArgumentException("updateGapMs must be 0..1000.");
         if (RedrawDelayMs is < 0 or > 10_000) throw new ArgumentException("redrawDelayMs must be 0..10000.");

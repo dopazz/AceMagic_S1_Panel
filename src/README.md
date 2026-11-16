@@ -12,7 +12,22 @@ dotnet test S1Panel.slnx                       # protocol tests (no hardware nee
 dotnet publish S1Panel.Cli -c Release -o ..\publish
 ```
 
-This produces a single `publish\s1panel.exe` (self-contained, about 43 MB). Copy it to the S1. The S1 doesn't need .NET installed.
+```powershell
+dotnet publish S1Panel.Tray -c Release -o ..\publish   # the tray app
+```
+
+This produces `publish\s1panel.exe` (command line, about 43 MB) and `publish\s1panel-tray.exe` (tray app, about 57 MB), both self-contained. Copy them to the same folder on the S1, so they share one `s1panel.json`. The S1 doesn't need .NET installed.
+
+## Tray app (everyday use)
+
+Run `s1panel-tray.exe`. It sits in the notification area and keeps the panel updated:
+
+- **Right-click** for: status, **Settings…**, quick **Layout** and **Scene** switching, **Pause/Resume** (pausing releases the panel so other tools can use it), **Start with Windows**, and **Exit**.
+- **Click or double-click** to open Settings, which covers every option, with a live preview of exactly what the panel will show. **Save/Apply** write `s1panel.json` and update the panel immediately.
+- It **reconnects by itself** after sleep, unplugging or USB errors. The icon turns orange while it's waiting for the panel, and grey while paused.
+- It **watches `s1panel.json`**, so `s1panel config set …` (even over ssh) takes effect without restarting.
+- **Start with Windows** uses the per-user Run key, so no admin is needed.
+- The tray app and a command-line `monitor` share a machine-wide lock, so they never fight over the panel; whichever starts second waits or is refused.
 
 ## Use (on the S1)
 
@@ -38,6 +53,29 @@ s1panel led rainbow --intensity 3 --speed 2   # rainbow | breathing | cycle | of
 
 LCD commands stay running and send a heartbeat every second until you press Ctrl+C. Without the heartbeat the firmware shows a "Disconnection…" notice.
 
+## Split layout and widgets
+
+`layout: split` shows two widgets side by side (stacked in portrait), chosen with `widgets` (left/top first):
+
+| Widget | Shows | Needs |
+|---|---|---|
+| `clock` | day, large time, date | - |
+| `cpu-ram` | CPU and RAM rings, CPU history graph | - |
+| `weather` | current conditions, today's high/low, 3-day forecast | location + internet (Open-Meteo, free, no key; only coordinates are sent) |
+| `sun-moon` | sunrise/sunset arc with the sun's position, daylight left, moon phase | location (calculated locally, no internet) |
+| `photos` | slideshow from a folder (subfolders included, EXIF rotation honoured) | `slideshow.folder` (default: your Pictures folder) |
+
+```powershell
+s1panel config set layout split
+s1panel config set widgets weather,sun-moon
+s1panel location                        # check what "auto" resolves to
+s1panel config set location 90210       # if Windows location is off: a ZIP code, a city, or lat,lon
+s1panel config set slideshow.folder D:\Photos\Favourites
+s1panel config set slideshow.intervalSeconds 60
+```
+
+**Location:** `auto` uses Windows' location service (Settings → Privacy & security → Location, "Let desktop apps access your location"). If Windows doesn't give a position, the tray app asks for a ZIP code once.
+
 ## Settings file
 
 Save your choices once, and a plain `s1panel monitor` uses them:
@@ -59,7 +97,7 @@ Order of precedence: **command-line option > settings file > built-in default**.
 
 | Key | Values | Default |
 |---|---|---|
-| `layout` | tiles, gauge, clock, scene, dashboard | dashboard |
+| `layout` | tiles, gauge, clock, scene, split, dashboard | dashboard |
 | `orientation` | landscape, portrait, landscape-flipped, portrait-flipped | landscape |
 | `clock` | 12, 24, auto | auto (Windows time format) |
 | `units` | metric, imperial, auto | auto (Windows region) |
@@ -67,6 +105,9 @@ Order of precedence: **command-line option > settings file > built-in default**.
 | `textSize` | normal, large, larger, or 0.5–2 | normal |
 | `intervalMs` | 100–3600000 | 1000 |
 | `drive` | drive letter for the disk reading | C: |
+| `widgets` | two of: clock, cpu-ram, weather, sun-moon, photos | clock, cpu-ram |
+| `location` | auto, a ZIP/postal code, a place name, or lat,lon | auto |
+| `slideshow` | `{ folder, intervalSeconds 5–86400, shuffle, fit: cover/contain }` | Pictures, 30, true, cover |
 | `scene` | autumn, winter, spring, summer, auto (by date: Dec–Feb winter, Mar–May spring, Jun–Aug summer, Sep–Nov autumn) | auto |
 | `background` | image path for the scene layout (replaces the artwork), or null | null |
 | `led` | `{ mode, intensity 1–5, speed 1–5, port }`, or null to leave the LEDs alone | null |
@@ -88,7 +129,9 @@ Develop without hardware by adding `--preview out.png` to any LCD command. It wr
 | `S1Panel.Core/Rendering/Layouts` | Monitor layouts (each draws landscape + portrait) and the metrics they show |
 | `S1Panel.Core/Sensors/NvmeTemperature.cs` | SSD temperature from the NVMe health log, no admin needed |
 | `S1Panel.Core/Config` | `s1panel.json` settings: model, validation, load/save, `config set` |
+| `S1Panel.Core/Monitor` | `MonitorEngine` (background update loop, auto-reconnect, live settings), `FrameComposer`, `PanelLock` |
 | `S1Panel.Cli` | `s1panel.exe` command line |
+| `S1Panel.Tray` | `s1panel-tray.exe`: notification-area app and settings window (WinForms) |
 
 Protocol notes are in `claude/NOTES.md`. The protocol was learned from the GPL-3 project in `example/`, and this code is a fresh implementation.
 

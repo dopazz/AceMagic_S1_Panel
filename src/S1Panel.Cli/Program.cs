@@ -2,9 +2,11 @@ using S1Panel.Core.Config;
 using S1Panel.Core.Hid;
 using S1Panel.Core.Lcd;
 using S1Panel.Core.Led;
+using S1Panel.Core.Monitor;
 using S1Panel.Core.Rendering;
 using S1Panel.Core.Rendering.Layouts;
 using S1Panel.Core.Sensors;
+using S1Panel.Core.Services;
 using SkiaSharp;
 
 namespace S1Panel.Cli;
@@ -26,9 +28,13 @@ internal static class Program
           s1panel led     [mode] [--intensity 1-5] [--speed 1-5] [--port COMx]
                           mode: rainbow | breathing | cycle | off | auto  (default: from settings)
           s1panel list                          Show detected panel / LED devices
+          s1panel location [ZIP|place|auto]     Check where weather / sun times will be for
 
         Monitor options (each overrides the settings file for this run):
-          --layout <tiles|gauge|clock|scene|dashboard>
+          --layout <tiles|gauge|clock|scene|split|dashboard>
+          --widgets <left,right>                the split layout's two widgets: clock, cpu-ram, weather, sun-moon, photos
+          --location <auto|ZIP|place|lat,lon>   for weather and sun times (auto = Windows location)
+          --photos <folder>                     pictures for the photos widget (default: your Pictures folder)
           --clock <12|24|auto>                  time format (auto = Windows setting)
           --units <metric|imperial|auto>        °C or °F (auto = Windows region)
           --text-size <normal|large|larger|1.2> bigger small text
@@ -99,9 +105,13 @@ internal static class Program
                     return RunStatic(args, settings, cts.Token, (c, w, h) => Scenes.Text(c, w, h, msg, fg, bg));
                 }
                 case "monitor": return Monitor(args, settings, cts.Token);
+                case "location": return Location(args, settings);
                 case "layouts":
                     foreach (var l in LayoutRegistry.All)
                         Console.WriteLine($"  {(l.Name == settings.Layout ? "*" : " ")} {l.Name,-10} {l.Description}");
+                    Console.WriteLine("\nWidgets for the split layout (--widgets left,right):");
+                    foreach (var (name, description) in S1Panel.Core.Rendering.Widgets.WidgetRegistry.All)
+                        Console.WriteLine($"  {(settings.Widgets.Contains(name) ? "*" : " ")} {name,-10} {description}");
                     return 0;
                 default:
                     Console.Error.WriteLine($"Unknown command '{cmd}'.\n");
@@ -304,69 +314,43 @@ internal static class Program
         return 0;
     }
 
-    private static int Monitor(Args args, PanelSettings settings, CancellationToken ct)
+    private static int Monitor(Args args, PanelSettings saved, CancellationToken ct)
     {
         // Command line beats the settings file; the settings file beats the defaults.
-        var orientation = OrientationExtensions.Parse(args.Option("orientation") ?? settings.Orientation);
-        int interval = args.IntOption("interval", settings.IntervalMs);
-        string drive = args.Option("drive") ?? settings.Drive;
-        if (!drive.EndsWith('\\')) drive += "\\";
-        var layout = LayoutRegistry.Get(args.Option("layout") ?? settings.Layout);
-        bool clock12 = PanelSettings.ParseClock12(args.Option("clock") ?? settings.Clock);
-        bool fahrenheit = PanelSettings.ParseFahrenheit(args.Option("units") ?? settings.Units);
-        bool blink = args.Flag("no-blink") ? false : args.Flag("blink") || settings.Blink;
-        float textScale = LayoutExtensions.ParseTextSize(args.Option("text-size") ?? settings.TextSize);
+        var settings = WithOverrides(args, saved);
+        using var composer = new FrameComposer(settings);
 
-        string? bgFile = args.Option("background") ?? settings.Background;
-        using SKBitmap? background = bgFile is null
-            ? null
-            : SKBitmap.Decode(bgFile) ?? throw new ArgumentException($"Could not read image '{bgFile}'.");
-        if (layout is SceneLayout scene)
+        if (args.Option("preview") is { } preview)
         {
-            scene.Image = background;
-            scene.Season = SceneArt.Parse(args.Option("scene") ?? settings.Scene);
-        }
-
-        var stats = new SystemStats(drive);
-        var history = new List<double>();
-        using var bmp = FrameConverter.CreateCanvasBitmap(orientation);
-        using var canvas = new SKCanvas(bmp);
-
-        string? preview = args.Option("preview");
-        using PanelSession? session = preview is null ? OpenSession(args, settings, orientation) : null;
-        if (preview is not null)
-        {
-            // Collect a few samples so the preview has something in the graph.
-            for (int i = 0; i < 20; i++) { Thread.Sleep(100); history.Add(stats.Sample().CpuPercent); }
-        }
-        else
-        {
-            Console.WriteLine($"Monitor running ({layout.Name}, {orientation}, {(clock12 ? "12" : "24")}-hour clock, " +
-                              $"{(fahrenheit ? "°F" : "°C")}, text {textScale:0.##}x) - press Ctrl+C to exit.");
-            if (settings.Led is { } led && !args.Flag("no-led"))
+            composer.WarmUp(); // so graphs and rates have data
+            composer.ComposeNext();
+            // Location/weather/photos load in the background: give them a moment so the preview isn't blank.
+            for (int i = 0; i < 60 && composer.HasPendingWork; i++)
             {
-                try { ApplyLed(led); }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
-                {
-                    Console.Error.WriteLine($"warning: LED settings not applied: {ex.Message}");
-                }
+                Thread.Sleep(250);
+                composer.ComposeNext();
+            }
+            composer.ComposeNext(); // data may have arrived just after the last frame
+            return SavePreview(composer.Bitmap, composer.Orientation, preview);
+        }
+
+        using var session = OpenSession(args, settings, composer.Orientation);
+        Console.WriteLine($"Monitor running ({composer.Layout.Name}, {composer.Orientation}, {(composer.Clock12 ? "12" : "24")}-hour clock, " +
+                          $"{(composer.Fahrenheit ? "°F" : "°C")}, text {composer.TextScale:0.##}x) - press Ctrl+C to exit.");
+        if (settings.Led is { } led && !args.Flag("no-led"))
+        {
+            try { ApplyLed(led); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                Console.Error.WriteLine($"warning: LED settings not applied: {ex.Message}");
             }
         }
 
         while (!ct.IsCancellationRequested)
         {
-            var s = stats.Sample();
-            history.Add(s.CpuPercent);
-            if (history.Count > 60) history.RemoveAt(0);
-
-            layout.Render(canvas, new LayoutContext(bmp.Width, bmp.Height, s, history, clock12, fahrenheit, blink, textScale));
-            canvas.Flush();
-
-            if (preview is not null)
-                return SavePreview(bmp, orientation, preview);
-
+            composer.ComposeNext();
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            session!.Present(bmp);
+            session.Present(composer.Bitmap);
             if (args.Flag("stats"))
                 Console.WriteLine($"{DateTime.Now:HH:mm:ss}  {(session.LastTilesSent < 0 ? "full redraw" : $"{session.LastTilesSent,2} tiles")}  {sw.ElapsedMilliseconds,5} ms");
             if (args.Flag("once"))
@@ -374,7 +358,7 @@ internal static class Program
 
             // Sleep until the next tick, keeping the heartbeat alive in between. Ticks are aligned to the wall
             // clock (every whole interval + 20 ms) so the blinking colon and seconds stay in step.
-            var next = NextTick(interval);
+            var next = MonitorEngine.NextTick(settings.IntervalMs);
             while (!ct.IsCancellationRequested && DateTime.UtcNow < next)
             {
                 session.KeepAlive();
@@ -384,12 +368,48 @@ internal static class Program
         return 0;
     }
 
-    private static DateTime NextTick(int intervalMs)
+    private static int Location(Args args, PanelSettings settings)
     {
-        long nowMs = DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond;
-        long nextMs = (nowMs / intervalMs + 1) * intervalMs + 20;
-        return new DateTime(nextMs * TimeSpan.TicksPerMillisecond, DateTimeKind.Utc);
+        string query = args.Positional(1) ?? settings.Location;
+        Console.WriteLine($"Resolving location '{query}'...");
+        var state = LocationService.ResolveAsync(query, CancellationToken.None).GetAwaiter().GetResult();
+        Console.WriteLine($"{state.Status}: {state.Message}");
+        if (state.Status == LocationStatus.NeedsInput)
+            Console.WriteLine("Set one with:  s1panel config set location <ZIP code or city>");
+        else if (state.Location is { } l)
+        {
+            var sun = Astronomy.Sun(l.Latitude, l.Longitude, DateOnly.FromDateTime(DateTime.Now));
+            Console.WriteLine($"Sunrise {sun.Sunrise:t}, sunset {sun.Sunset:t} (this PC's time zone); moon: {Astronomy.Moon(DateTime.UtcNow).Name}");
+        }
+        return state.Status == LocationStatus.Ready ? 0 : 3;
     }
+
+    /// <summary>A copy of the saved settings with any monitor options from the command line applied.</summary>
+    private static PanelSettings WithOverrides(Args args, PanelSettings saved)
+    {
+        var s = SettingsStore.Clone(saved);
+        s.Orientation = args.Option("orientation") ?? s.Orientation;
+        s.Layout = args.Option("layout") ?? s.Layout;
+        s.Clock = args.Option("clock") ?? s.Clock;
+        s.Units = args.Option("units") ?? s.Units;
+        s.TextSize = args.Option("text-size") ?? s.TextSize;
+        s.Scene = args.Option("scene") ?? s.Scene;
+        s.Location = args.Option("location") ?? s.Location;
+        if (args.Option("photos") is { } photos)
+            s.Slideshow.Folder = photos;
+        if (args.Option("widgets") is { } widgets)
+            s.Widgets = widgets.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        s.Drive = args.Option("drive") ?? s.Drive;
+        s.Background = args.Option("background") ?? s.Background;
+        s.IntervalMs = args.IntOption("interval", s.IntervalMs);
+        if (args.Flag("no-blink")) s.Blink = false;
+        else if (args.Flag("blink")) s.Blink = true;
+        s.Validate();
+        return s;
+    }
+
+    /// <summary>Held for the life of the process once a screen command opens the panel.</summary>
+    private static PanelLock? _panelLock;
 
     private static PanelSession OpenSession(Args args, PanelSettings settings, Orientation orientation)
     {
@@ -399,6 +419,8 @@ internal static class Program
             UpdateGap = TimeSpan.FromMilliseconds(args.IntOption("update-gap", settings.UpdateGapMs)),
             AlwaysRedraw = args.Flag("always-redraw"),
         };
+        _panelLock ??= PanelLock.TryAcquire()
+                       ?? throw new IOException("The panel is in use by another s1panel (is the tray app running? Pause it from its menu first).");
         var lcd = LcdPanel.Open(args.Option("device") ?? settings.Device);
         return new PanelSession(lcd, orientation, options);
     }

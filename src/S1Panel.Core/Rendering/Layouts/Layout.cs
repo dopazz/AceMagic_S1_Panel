@@ -9,7 +9,8 @@ namespace S1Panel.Core.Rendering.Layouts;
 /// <param name="BlinkColon">Hide the hours:minutes colon on odd seconds (1 s on, 1 s off).</param>
 /// <param name="TextScale">Text size multiplier (1 = design size). Applied mostly to small text; see <see cref="Gfx.Scaled"/>.</param>
 public sealed record LayoutContext(int Width, int Height, StatsSnapshot Stats, IReadOnlyList<double> CpuHistory,
-    bool Clock12 = false, bool Fahrenheit = false, bool BlinkColon = true, float TextScale = 1f)
+    bool Clock12 = false, bool Fahrenheit = false, bool BlinkColon = true, float TextScale = 1f,
+    S1Panel.Core.Rendering.Widgets.WidgetEnvironment? Env = null)
 {
     public ClockStyle Clock => new(Clock12, BlinkColon && Stats.Time.Second % 2 == 1);
 
@@ -57,12 +58,17 @@ public static class LayoutRegistry
         new GaugeLayout(),
         new ClockLayout(),
         new SceneLayout(),
+        new SplitLayout(),
         new DashboardLayout(),
     ];
 
+    /// <summary>The shared catalogue instance (for names/descriptions/validation). Use <see cref="Create"/> to draw.</summary>
     public static ILayout Get(string name) =>
         All.FirstOrDefault(l => string.Equals(l.Name, name, StringComparison.OrdinalIgnoreCase))
         ?? throw new ArgumentException($"Unknown layout '{name}'. Available: {string.Join(", ", All.Select(l => l.Name))}.");
+
+    /// <summary>A fresh instance, so layouts with state (the scene's cached picture) aren't shared between threads.</summary>
+    public static ILayout Create(string name) => (ILayout)Activator.CreateInstance(Get(name).GetType())!;
 }
 
 /// <summary>The existing clock/bars/sparkline dashboard, wrapped as a layout.</summary>

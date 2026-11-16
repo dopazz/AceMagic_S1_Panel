@@ -20,14 +20,10 @@ public sealed class PanelSessionOptions
 
 /// <summary>
 /// High-level driver: draw on an SKBitmap in logical orientation, call <see cref="Present"/>,
-/// and only the changed 64x32 tiles are sent to the panel. Call <see cref="KeepAlive"/> when idle.
+/// and only the changed areas are sent to the panel, in as few writes as possible (see <see cref="UpdatePlanner"/>). Call <see cref="KeepAlive"/> when idle.
 /// </summary>
 public sealed class PanelSession : IDisposable
 {
-    // 64 * 32 * 2 = 4096 bytes: one tile fills exactly one report.
-    private const int TileW = 64;
-    private const int TileH = 32;
-
     private readonly LcdPanel _lcd;
     private readonly byte[] _frame = new byte[LcdPanel.FrameBytes];
     private readonly byte[] _shown = new byte[LcdPanel.FrameBytes];
@@ -39,7 +35,7 @@ public sealed class PanelSession : IDisposable
     public Orientation Orientation { get; }
     public PanelSessionOptions Options { get; }
 
-    /// <summary>Number of tile updates sent by the last <see cref="Present"/> (-1 = full redraw).</summary>
+    /// <summary>Number of partial-update writes sent by the last <see cref="Present"/> (-1 = full redraw).</summary>
     public int LastTilesSent { get; private set; }
 
     public PanelSession(LcdPanel lcd, Orientation orientation, PanelSessionOptions? options = null)
@@ -68,25 +64,16 @@ public sealed class PanelSession : IDisposable
             return;
         }
 
-        int sent = 0;
-        for (int ty = 0; ty < LcdPanel.Height; ty += TileH)
+        var plan = UpdatePlanner.Plan(_shown, _frame);
+        foreach (var r in plan)
         {
-            int th = Math.Min(TileH, LcdPanel.Height - ty);
-            for (int tx = 0; tx < LcdPanel.Width; tx += TileW)
-            {
-                int tw = Math.Min(TileW, LcdPanel.Width - tx);
-                if (!TileChanged(tx, ty, tw, th))
-                    continue;
-
-                CopyTile(tx, ty, tw, th);
-                _lcd.Update(tx, ty, tw, th, _tile);
-                sent++;
-                Thread.Sleep(Options.UpdateGap);
-            }
+            CopyRect(r);
+            _lcd.Update(r.X, r.Y, r.W, r.H, _tile);
+            Thread.Sleep(Options.UpdateGap);
         }
 
         _frame.CopyTo(_shown, 0);
-        LastTilesSent = sent;
+        LastTilesSent = plan.Count;
         KeepAlive();
     }
 
@@ -108,24 +95,13 @@ public sealed class PanelSession : IDisposable
         _lastHeartbeat = _clock.Elapsed;
     }
 
-    private bool TileChanged(int tx, int ty, int tw, int th)
-    {
-        for (int y = ty; y < ty + th; y++)
-        {
-            int o = (y * LcdPanel.Width + tx) * 2;
-            if (!_frame.AsSpan(o, tw * 2).SequenceEqual(_shown.AsSpan(o, tw * 2)))
-                return true;
-        }
-        return false;
-    }
-
-    private void CopyTile(int tx, int ty, int tw, int th)
+    private void CopyRect(PixelRect r)
     {
         int d = 0;
-        for (int y = ty; y < ty + th; y++)
+        for (int y = r.Y; y < r.Bottom; y++)
         {
-            _frame.AsSpan((y * LcdPanel.Width + tx) * 2, tw * 2).CopyTo(_tile.AsSpan(d));
-            d += tw * 2;
+            _frame.AsSpan((y * LcdPanel.Width + r.X) * 2, r.W * 2).CopyTo(_tile.AsSpan(d));
+            d += r.W * 2;
         }
     }
 }

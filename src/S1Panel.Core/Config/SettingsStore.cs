@@ -96,6 +96,10 @@ public static class SettingsStore
 
     public static string Serialize(PanelSettings settings) => JsonSerializer.Serialize(settings, Json);
 
+    /// <summary>Deep copy.</summary>
+    public static PanelSettings Clone(PanelSettings settings) =>
+        JsonSerializer.Deserialize<PanelSettings>(Serialize(settings), Json)!;
+
     /// <summary>
     /// Returns a copy of <paramref name="settings"/> with one key changed, validated.
     /// Keys are the JSON names (case-insensitive, kebab-case accepted), "led.mode"-style for nested values.
@@ -175,6 +179,10 @@ public static class SettingsStore
             case JsonValueKind.Number:
                 if (!int.TryParse(v, out int n)) throw new ArgumentException($"{name} must be a whole number (got '{value}').");
                 return JsonValue.Create(n);
+            case JsonValueKind.Array:
+                // "clock,cpu-ram" -> ["clock","cpu-ram"]
+                return new JsonArray(v.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(x => (JsonNode?)JsonValue.Create(x)).ToArray());
             case JsonValueKind.Object:
                 throw new ArgumentException($"'{name}' is a group; set one of its keys (e.g. {name}.mode) or 'none' to clear it.");
             default:

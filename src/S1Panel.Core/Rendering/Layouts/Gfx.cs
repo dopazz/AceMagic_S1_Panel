@@ -155,6 +155,37 @@ internal static class Gfx
         c.DrawCircle(x, y, r, p);
     }
 
+    /// <summary>Line graph of 0..100 values in a rounded frame, filled underneath.</summary>
+    public static void Sparkline(SKCanvas c, SKRect r, IReadOnlyList<double> values, SKColor color)
+    {
+        using var p = new SKPaint { IsAntialias = true, Color = Track, Style = SKPaintStyle.Stroke, StrokeWidth = 1 };
+        c.DrawRoundRect(r, 4, 4, p);
+        int n = values.Count;
+        if (n < 2)
+            return;
+
+        using var builder = new SKPathBuilder();
+        for (int i = 0; i < n; i++)
+        {
+            float x = r.Left + 2 + (r.Width - 4) * i / (n - 1);
+            float y = r.Bottom - 2 - (float)(Math.Clamp(values[i], 0, 100) / 100 * (r.Height - 4));
+            if (i == 0) builder.MoveTo(x, y); else builder.LineTo(x, y);
+        }
+        using var line = builder.Snapshot();
+        builder.LineTo(r.Right - 2, r.Bottom - 2);
+        builder.LineTo(r.Left + 2, r.Bottom - 2);
+        builder.Close();
+        using var fill = builder.Detach();
+
+        p.Style = SKPaintStyle.Fill;
+        p.Color = color.WithAlpha(60);
+        c.DrawPath(fill, p);
+        p.Style = SKPaintStyle.Stroke;
+        p.StrokeWidth = 1.5f;
+        p.Color = color;
+        c.DrawPath(line, p);
+    }
+
     public static SKRect Inset(SKRect r, float d) => new(r.Left + d, r.Top + d, r.Right - d, r.Bottom - d);
 
     /// <summary>"13:05" (24 h) or ("1:05", "PM") (12 h). AM/PM is always English, as the panel shows it.</summary>
