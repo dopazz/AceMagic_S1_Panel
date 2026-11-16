@@ -1,2 +1,15 @@
 #don't track the example code from github
 example/
+# build output
+bin/
+obj/
+publish/
+*.user
+.vs/
+bin_out/
+
+# claude/ working files that shouldn't be versioned
+# vendor app dump: copyrighted assets + the vulnerable WinRing0 driver (regenerate with claude/scripts + claude/tools)
+claude/dump_original/
+# rendered preview PNGs: regenerate any time with `s1panel ... --preview <file>`
+claude/previews/

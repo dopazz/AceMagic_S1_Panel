@@ -1,0 +1,119 @@
+using System.Globalization;
+using S1Panel.Core.Lcd;
+using S1Panel.Core.Led;
+using S1Panel.Core.Rendering.Layouts;
+
+namespace S1Panel.Core.Config;
+
+/// <summary>LED strip settings. When present in the settings file, they're applied whenever the monitor starts.</summary>
+public sealed class LedSettings
+{
+    /// <summary>rainbow | breathing | cycle | off | auto</summary>
+    public string Mode { get; set; } = "breathing";
+
+    /// <summary>1 (dim) .. 5 (bright)</summary>
+    public int Intensity { get; set; } = 3;
+
+    /// <summary>1 (slow) .. 5 (fast)</summary>
+    public int Speed { get; set; } = 3;
+
+    /// <summary>COM port, or null to auto-detect the CH340.</summary>
+    public string? Port { get; set; }
+}
+
+/// <summary>
+/// Everything that can live in s1panel.json. Values are kept as the same strings the command line accepts
+/// ("auto", "larger", "portrait"...), so the file and the CLI share one vocabulary.
+/// </summary>
+public sealed class PanelSettings
+{
+    /// <summary>Monitor layout: tiles | gauge | clock | scene | dashboard</summary>
+    public string Layout { get; set; } = "dashboard";
+
+    /// <summary>landscape | portrait | landscape-flipped | portrait-flipped</summary>
+    public string Orientation { get; set; } = "landscape";
+
+    /// <summary>12 | 24 | auto (Windows regional time format)</summary>
+    public string Clock { get; set; } = "auto";
+
+    /// <summary>metric | imperial | auto (Windows region)</summary>
+    public string Units { get; set; } = "auto";
+
+    /// <summary>Blink the hours:minutes colon (the clock layout never blinks).</summary>
+    public bool Blink { get; set; } = true;
+
+    /// <summary>normal | large | larger | a number 0.5-2</summary>
+    public string TextSize { get; set; } = "normal";
+
+    /// <summary>Milliseconds between monitor updates.</summary>
+    public int IntervalMs { get; set; } = 1000;
+
+    /// <summary>Drive whose usage is shown.</summary>
+    public string Drive { get; set; } = "C:";
+
+    /// <summary>Scene layout artwork: autumn | winter | spring | summer | auto (follows the calendar).</summary>
+    public string Scene { get; set; } = "auto";
+
+    /// <summary>Picture for the scene layout (overrides <see cref="Scene"/>), or null for the built-in art.</summary>
+    public string? Background { get; set; }
+
+    /// <summary>LED strip settings, or null to leave the LEDs alone.</summary>
+    public LedSettings? Led { get; set; }
+
+    /// <summary>HID device path, or null to auto-detect.</summary>
+    public string? Device { get; set; }
+
+    /// <summary>Pause between partial-update writes (ms).</summary>
+    public int UpdateGapMs { get; set; } = 4;
+
+    /// <summary>Pause after a full-screen redraw (ms).</summary>
+    public int RedrawDelayMs { get; set; } = 1600;
+
+    /// <summary>Throws <see cref="ArgumentException"/> naming the first bad setting.</summary>
+    public void Validate()
+    {
+        Check("layout", () => LayoutRegistry.Get(Layout));
+        Check("orientation", () => OrientationExtensions.Parse(Orientation));
+        Check("clock", () => ParseClock12(Clock));
+        Check("units", () => ParseFahrenheit(Units));
+        Check("textSize", () => LayoutExtensions.ParseTextSize(TextSize));
+        Check("scene", () => SceneArt.Parse(Scene));
+        if (IntervalMs is < 100 or > 3_600_000) throw new ArgumentException("intervalMs must be 100..3600000.");
+        if (UpdateGapMs is < 0 or > 1000) throw new ArgumentException("updateGapMs must be 0..1000.");
+        if (RedrawDelayMs is < 0 or > 10_000) throw new ArgumentException("redrawDelayMs must be 0..10000.");
+        if (string.IsNullOrWhiteSpace(Drive)) throw new ArgumentException("drive must not be empty.");
+        if (Led is { } led)
+        {
+            Check("led.mode", () => LedStrip.ParseMode(led.Mode));
+            if (led.Intensity is < 1 or > 5) throw new ArgumentException("led.intensity must be 1..5.");
+            if (led.Speed is < 1 or > 5) throw new ArgumentException("led.speed must be 1..5.");
+        }
+
+        static void Check(string key, Action parse)
+        {
+            try { parse(); }
+            catch (ArgumentException ex) when (!ex.Message.StartsWith(key, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException($"{key}: {ex.Message}", ex);
+            }
+        }
+    }
+
+    /// <summary>12 | 24 | auto. "auto" follows Windows: 12-hour time patterns use a lowercase 'h'.</summary>
+    public static bool ParseClock12(string value) => value.Trim().ToLowerInvariant() switch
+    {
+        "12" => true,
+        "24" => false,
+        "auto" => CultureInfo.CurrentCulture.DateTimeFormat.ShortTimePattern.Contains('h'),
+        _ => throw new ArgumentException($"clock must be 12, 24 or auto (got '{value}')."),
+    };
+
+    /// <summary>metric | imperial | auto. "auto" follows the Windows region.</summary>
+    public static bool ParseFahrenheit(string value) => value.Trim().ToLowerInvariant() switch
+    {
+        "imperial" or "f" => true,
+        "metric" or "c" => false,
+        "auto" => !RegionInfo.CurrentRegion.IsMetric,
+        _ => throw new ArgumentException($"units must be metric, imperial or auto (got '{value}')."),
+    };
+}

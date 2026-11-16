@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="S1Panel.Cli/S1Panel.Cli.csproj" />
+  <Project Path="S1Panel.Core/S1Panel.Core.csproj" />
+  <Project Path="S1Panel.Tests/S1Panel.Tests.csproj" />
+</Solution>
