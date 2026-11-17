@@ -20,8 +20,8 @@ rem   zip_distribution\s1panel-source.zip        the source on its own
 rem
 rem It runs the tests, then publishes both programs self-contained (no .NET
 rem needed on the PC that runs them).  Needs the .NET 10 SDK.  The source
-rem zip is LICENSE, CREDITS.md, src\ and this packaging (without its
-rem output), minus build output, so it builds and packages again as is.
+rem zip is LICENSE, CREDITS.md, README.md, src\ and this packaging, minus
+rem build output, so it builds and packages again as is.
 rem The zips are made by Windows' own tar.exe (bsdtar, in System32 since
 rem Windows 10 1803).  Pass --no-tests to skip the tests.
 setlocal
@@ -42,7 +42,7 @@ mkdir "%D%\licenses" || exit /b 1
 rem the source, as fully compressed as zip goes
 "%TAR%" -a -c -f "%D%\s1panel-source.zip" --options zip:compression-level=9 ^
     --exclude bin --exclude obj --exclude .vs --exclude "*.user" ^
-    LICENSE CREDITS.md src packaging\windows.cmd packaging\README-windows.txt packaging\licenses || exit /b 1
+    LICENSE CREDITS.md README.md src packaging\windows.cmd packaging\README-windows.txt packaging\licenses || exit /b 1
 
 copy /y publish\s1panel-tray.exe "%D%\" >nul || exit /b 1
 copy /y publish\s1panel.exe "%D%\" >nul || exit /b 1
