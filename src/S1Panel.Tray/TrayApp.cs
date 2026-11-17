@@ -1,3 +1,14 @@
+// S1 Panel - front LCD and LED strip control for the AceMagic S1
+// Copyright (C) 2026 dopaz
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// This program is free software: you can redistribute it and/or modify it under the terms of the
+// GNU General Public License as published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version. It is distributed WITHOUT ANY WARRANTY; see the
+// GNU General Public License in LICENSE for details.
+//
+// Developed with Claude Code (Claude Opus 5.5).
+
 using Microsoft.Win32;
 using S1Panel.Core.Config;
 using S1Panel.Core.Monitor;
@@ -27,6 +38,7 @@ internal sealed class TrayApp : ApplicationContext
     private string _settingsPath;
     private string _lastSavedJson;
     private SettingsForm? _settingsForm;
+    private AboutForm? _aboutForm;
     private Icon? _currentIcon;
     private bool _askedForZip;
     private bool _exiting;
@@ -113,6 +125,7 @@ internal sealed class TrayApp : ApplicationContext
             _pause,
             new ToolStripSeparator(),
             _autostart,
+            new ToolStripMenuItem("About S1 Panel…", null, (_, _) => OpenAbout()),
             new ToolStripMenuItem("Exit", null, (_, _) => { TrayLog.Write("Exit chosen from the tray menu."); ExitThread(); }),
         ]);
         _menu.Opening += (_, _) => RefreshMenu();
@@ -216,6 +229,19 @@ internal sealed class TrayApp : ApplicationContext
         _settingsForm.Activate();
     }
 
+    private void OpenAbout()
+    {
+        if (_aboutForm is { IsDisposed: false })
+        {
+            _aboutForm.Activate();
+            return;
+        }
+        _aboutForm = new AboutForm();
+        _aboutForm.FormClosed += (_, _) => _aboutForm = null;
+        _aboutForm.Show();
+        _aboutForm.Activate();
+    }
+
     private void OnLocationUnavailable(string why) => _ui.Post(_ =>
     {
         // Ask once per run, and only if the user hasn't already given a location.
@@ -240,6 +266,7 @@ internal sealed class TrayApp : ApplicationContext
         LocationService.WindowsLocationUnavailable -= OnLocationUnavailable;
         _watcher?.Dispose();
         _settingsForm?.Close();
+        _aboutForm?.Close();
         _engine.Dispose();
         _icon.Visible = false;
         _icon.Dispose();

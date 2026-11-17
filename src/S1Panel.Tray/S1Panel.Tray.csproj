@@ -1,4 +1,17 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+﻿<!--
+  S1 Panel - front LCD and LED strip control for the AceMagic S1
+  Copyright (C) 2026 dopaz
+  SPDX-License-Identifier: GPL-3.0-or-later
+
+  This program is free software: you can redistribute it and/or modify it under the terms of the
+  GNU General Public License as published by the Free Software Foundation, either version 3 of the
+  License, or (at your option) any later version. It is distributed WITHOUT ANY WARRANTY; see the
+  GNU General Public License in LICENSE for details.
+
+  Developed with Claude Code (Claude Opus 5.5).
+-->
+
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -21,6 +34,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\S1Panel.Core\S1Panel.Core.csproj" />
+  </ItemGroup>
+
+  <!-- the build time shown in About (UTC; shown in local time) -->
+  <ItemGroup>
+    <AssemblyMetadata Include="BuildTimestamp" Value="$([System.DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))" />
   </ItemGroup>
 
   <!-- keep debug symbols (incl. the 99 MB libSkiaSharp.pdb) out of the publish folder -->

@@ -1,3 +1,14 @@
+// S1 Panel - front LCD and LED strip control for the AceMagic S1
+// Copyright (C) 2026 dopaz
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// This program is free software: you can redistribute it and/or modify it under the terms of the
+// GNU General Public License as published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version. It is distributed WITHOUT ANY WARRANTY; see the
+// GNU General Public License in LICENSE for details.
+//
+// Developed with Claude Code (Claude Opus 5.5).
+
 using S1Panel.Core.Config;
 
 namespace S1Panel.Tray;
@@ -8,6 +19,7 @@ internal static class Program
     /// s1panel-tray.exe [--config file]
     ///   --write-icon file.ico           (dev) write the app icon and exit
     ///   --screenshot-settings out.png   (dev) render the settings window to a PNG and exit
+    ///   --screenshot-about out.png      (dev) render the About window to a PNG and exit
     /// </summary>
     [STAThread]
     private static int Main(string[] args)
@@ -26,6 +38,8 @@ internal static class Program
 
         ApplicationConfiguration.Initialize();
 
+        if (Arg("--screenshot-about") is { } aboutShot)
+            return Capture(new AboutForm(), aboutShot);
         if (Arg("--screenshot-settings") is { } shot)
             return Screenshot(shot, Arg("--config"), int.TryParse(Arg("--tab"), out int tab) ? tab : 0);
 
@@ -77,6 +91,23 @@ internal static class Program
         form.DrawToBitmap(bmp, new Rectangle(0, 0, form.Width, form.Height));
         bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
         form.Close();
+        return 0;
+    }
+
+    private static int Capture(Form form, string path)
+    {
+        using (form)
+        {
+            form.StartPosition = FormStartPosition.Manual;
+            form.Location = new Point(-4000, -4000);
+            form.ShowInTaskbar = false;
+            form.Show();
+            Application.DoEvents();
+            using var bmp = new Bitmap(form.Width, form.Height);
+            form.DrawToBitmap(bmp, new Rectangle(0, 0, form.Width, form.Height));
+            bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+            form.Close();
+        }
         return 0;
     }
 

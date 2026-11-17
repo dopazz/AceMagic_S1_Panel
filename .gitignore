@@ -13,3 +13,7 @@ bin_out/
 claude/dump_original/
 # rendered preview PNGs: regenerate any time with `s1panel ... --preview <file>`
 claude/previews/
+
+# packaging output (packaging\windows.cmd)
+packaging/windows/
+packaging/src/

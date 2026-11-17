@@ -18,6 +18,8 @@ dotnet publish S1Panel.Tray -c Release -o ..\publish   # the tray app
 
 This produces `publish\s1panel.exe` (command line, about 43 MB) and `publish\s1panel-tray.exe` (tray app, about 57 MB), both self-contained. Copy them to the same folder on the S1, so they share one `s1panel.json`. The S1 doesn't need .NET installed.
 
+To make the distribution zip (both programs, a README, the licenses and the source), run `packaging\windows.cmd` from anywhere. It runs the tests first (add `--no-tests` to skip them) and writes `packaging\windows\s1panel-windows-x64.zip`, plus the source on its own as `packaging\src\s1panel-source.zip`.
+
 ## Tray app (everyday use)
 
 Run `s1panel-tray.exe`. It sits in the notification area and keeps the panel updated:
