@@ -28,11 +28,12 @@ internal static class Program
           s1panel led     [mode] [--intensity 1-5] [--speed 1-5] [--port COMx]
                           mode: rainbow | breathing | cycle | off | auto  (default: from settings)
           s1panel list                          Show detected panel / LED devices
-          s1panel location [ZIP|place|auto]     Check where weather / sun times will be for
+          s1panel location [ZIP|place|auto]     Check the location used for weather / sun times
+          s1panel now-playing [--seconds N]     Show what Windows reports as playing (diagnostics)
 
         Monitor options (each overrides the settings file for this run):
           --layout <tiles|gauge|clock|scene|split|dashboard>
-          --widgets <left,right>                the split layout's two widgets: clock, cpu-ram, weather, sun-moon, photos
+          --widgets <left,right>                the split layout's two widgets (see `s1panel layouts`)
           --location <auto|ZIP|place|lat,lon>   for weather and sun times (auto = Windows location)
           --photos <folder>                     pictures for the photos widget (default: your Pictures folder)
           --clock <12|24|auto>                  time format (auto = Windows setting)
@@ -75,7 +76,7 @@ internal static class Program
 
             if (cmd == "config")
                 return Config(args);
-            if (cmd is null or "help" or "-h" or "--help" or "/?")
+            if (cmd is null or "help" or "-h" or "/?" || args.Flag("help") || args.Flag("h"))
             {
                 Console.WriteLine(Usage);
                 return cmd is null ? 1 : 0;
@@ -106,6 +107,7 @@ internal static class Program
                 }
                 case "monitor": return Monitor(args, settings, cts.Token);
                 case "location": return Location(args, settings);
+                case "now-playing": return NowPlaying(args, cts.Token);
                 case "layouts":
                     foreach (var l in LayoutRegistry.All)
                         Console.WriteLine($"  {(l.Name == settings.Layout ? "*" : " ")} {l.Name,-10} {l.Description}");
@@ -384,6 +386,27 @@ internal static class Program
         return state.Status == LocationStatus.Ready ? 0 : 3;
     }
 
+    /// <summary>Prints what Windows' media sessions report every 2 s (and what the widget shows), for diagnosing now-playing.</summary>
+    private static int NowPlaying(Args args, CancellationToken ct)
+    {
+        int seconds = int.TryParse(args.Option("seconds"), out int s) ? s : 10;
+        var end = DateTime.UtcNow.AddSeconds(seconds);
+        NowPlayingService.WindowsEvent += what => Console.WriteLine($"{DateTime.Now:HH:mm:ss.f} event:   {what}");
+        do
+        {
+            string windows = NowPlayingService.DescribeAsync(ct).GetAwaiter().GetResult();
+            var state = NowPlayingService.Get();
+            string widget = state.Media is { } m ? $"'{m.Title}' by '{m.Artist}' ({m.App}, {(m.Playing ? "playing" : "paused")}, art={(m.Art is null ? "no" : "yes")})"
+                : state.Ready ? state.Problem ?? "nothing playing" : "checking";
+            Console.WriteLine($"{DateTime.Now:HH:mm:ss} windows: {windows}");
+            var wa = WinampSource.Read();
+            Console.WriteLine($"{DateTime.Now:HH:mm:ss} winamp:  {(wa is null ? "no Winamp/WACUP window" : $"{wa.ExeName} '{wa.Display}' {wa.Status} {(int)wa.Position.TotalSeconds}s/{(int)wa.Length.TotalSeconds}s")}");
+            Console.WriteLine($"{DateTime.Now:HH:mm:ss} widget:  {widget}");
+            Console.Out.Flush();
+        } while (DateTime.UtcNow < end && !ct.WaitHandle.WaitOne(1000));
+        return 0;
+    }
+
     /// <summary>A copy of the saved settings with any monitor options from the command line applied.</summary>
     private static PanelSettings WithOverrides(Args args, PanelSettings saved)
     {
@@ -447,7 +470,7 @@ internal sealed class Args
 
     private static readonly HashSet<string> Flags = new(StringComparer.OrdinalIgnoreCase)
     {
-        "once", "contain", "always-redraw", "stats", "no-blink", "blink", "no-led", "force",
+        "once", "contain", "always-redraw", "stats", "no-blink", "blink", "no-led", "force", "help", "h",
     };
 
     public Args(string[] argv)

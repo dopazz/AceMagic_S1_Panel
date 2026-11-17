@@ -22,7 +22,7 @@ This produces `publish\s1panel.exe` (command line, about 43 MB) and `publish\s1p
 
 Run `s1panel-tray.exe`. It sits in the notification area and keeps the panel updated:
 
-- **Right-click** for: status, **Settings…**, quick **Layout** and **Scene** switching, **Pause/Resume** (pausing releases the panel so other tools can use it), **Start with Windows**, and **Exit**.
+- **Right-click** for: status, **Settings…**, quick **Layout** and **Scene** switching, **Lights Out** (black screen and LED strip off; your layout and LED settings come back when you untick it), **Pause/Resume** (pausing releases the panel so other tools can use it), **Start with Windows**, and **Exit**.
 - **Click or double-click** to open Settings, which covers every option, with a live preview of exactly what the panel will show. **Save/Apply** write `s1panel.json` and update the panel immediately.
 - It **reconnects by itself** after sleep, unplugging or USB errors. The icon turns orange while it's waiting for the panel, and grey while paused.
 - It **watches `s1panel.json`**, so `s1panel config set …` (even over ssh) takes effect without restarting.
@@ -38,7 +38,7 @@ s1panel list                                  # find the LCD (HID 04D9:FD01) and
 s1panel test                                  # colour bars + "TOP ^" marker
 s1panel test --orientation landscape          # try other orientations until the marker points up
 s1panel monitor                               # live clock / CPU / RAM / disk / network
-s1panel layouts                               # list layouts: tiles, gauge, clock, scene, dashboard
+s1panel layouts                               # list layouts: tiles, gauge, clock, scene, split, dashboard, blank
 s1panel monitor --layout gauge                # any layout, landscape (default) or --orientation portrait
 s1panel monitor --layout scene --clock 12     # 12-hour with AM/PM; --clock 24, or auto (default: Windows setting)
 s1panel monitor --units metric                # °C; --units imperial for °F, or auto (default: Windows region)
@@ -64,6 +64,9 @@ LCD commands stay running and send a heartbeat every second until you press Ctrl
 | `weather` | current conditions, today's high/low, 3-day forecast | location + internet (Open-Meteo, free, no key; only coordinates are sent) |
 | `sun-moon` | sunrise/sunset arc with the sun's position, daylight left, moon phase | location (calculated locally, no internet) |
 | `photos` | slideshow from a folder (subfolders included, EXIF rotation honoured) | `slideshow.folder` (default: your Pictures folder) |
+| `now-playing` | album art, title, artist and progress of what Windows' media flyout shows (Spotify, browsers, Media Player…) | nothing (needs the tray app or a desktop session, not ssh) |
+| `robot` | animated robot whose mood follows CPU load; sleeps late at night, waves on the hour | nothing |
+| `hamster` | animated hamster whose wheel spins with CPU load; counts the day's laps | nothing |
 
 ```powershell
 s1panel config set layout split
@@ -97,7 +100,7 @@ Order of precedence: **command-line option > settings file > built-in default**.
 
 | Key | Values | Default |
 |---|---|---|
-| `layout` | tiles, gauge, clock, scene, split, dashboard | dashboard |
+| `layout` | tiles, gauge, clock, scene, split, dashboard, blank (plain black: the panel has no off switch) | dashboard |
 | `orientation` | landscape, portrait, landscape-flipped, portrait-flipped | landscape |
 | `clock` | 12, 24, auto | auto (Windows time format) |
 | `units` | metric, imperial, auto | auto (Windows region) |
@@ -105,12 +108,13 @@ Order of precedence: **command-line option > settings file > built-in default**.
 | `textSize` | normal, large, larger, or 0.5–2 | normal |
 | `intervalMs` | 100–3600000 | 1000 |
 | `drive` | drive letter for the disk reading | C: |
-| `widgets` | two of: clock, cpu-ram, weather, sun-moon, photos | clock, cpu-ram |
+| `widgets` | two of: clock, cpu-ram, weather, sun-moon, photos, now-playing, robot, hamster | clock, cpu-ram |
 | `location` | auto, a ZIP/postal code, a place name, or lat,lon | auto |
 | `slideshow` | `{ folder, intervalSeconds 5–86400, shuffle, fit: cover/contain }` | Pictures, 30, true, cover |
 | `scene` | autumn, winter, spring, summer, auto (by date: Dec–Feb winter, Mar–May spring, Jun–Aug summer, Sep–Nov autumn) | auto |
 | `background` | image path for the scene layout (replaces the artwork), or null | null |
 | `led` | `{ mode, intensity 1–5, speed 1–5, port }`, or null to leave the LEDs alone | null |
+| `lightsOut` | true = blank screen and LED strip off, keeping `layout` and `led` for when it's switched back | false |
 | `device`, `updateGapMs`, `redrawDelayMs` | hardware tuning | auto, 4, 1600 |
 
 Develop without hardware by adding `--preview out.png` to any LCD command. It writes exactly what the panel would show, including RGB565 colour loss and rotation.

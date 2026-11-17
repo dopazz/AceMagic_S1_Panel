@@ -18,6 +18,7 @@ internal sealed class TrayApp : ApplicationContext
     private readonly ToolStripMenuItem _layoutMenu = new("Layout");
     private readonly ToolStripMenuItem _sceneMenu = new("Scene");
     private readonly ToolStripMenuItem _pause = new("Pause");
+    private readonly ToolStripMenuItem _lightsOut = new("Lights Out") { ToolTipText = "Black screen and LED strip off (the panel has no real off switch)" };
     private readonly ToolStripMenuItem _autostart = new("Start with Windows");
     private readonly SynchronizationContext _ui;
     private readonly MonitorEngine _engine;
@@ -28,12 +29,15 @@ internal sealed class TrayApp : ApplicationContext
     private SettingsForm? _settingsForm;
     private Icon? _currentIcon;
     private bool _askedForZip;
+    private bool _exiting;
 
     public TrayApp(string? explicitConfigPath)
     {
         var (settings, path) = SettingsStore.Load(explicitConfigPath);
         _settingsPath = path ?? explicitConfigPath ?? SettingsStore.ExeDirPath;
         _lastSavedJson = SettingsStore.Serialize(settings);
+        TrayLog.Init(_settingsPath);
+        TrayLog.Write($"Started (layout {settings.Layout}, widgets {string.Join(",", settings.Widgets)}).");
 
         BuildMenu();
         _ui = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
@@ -46,6 +50,9 @@ internal sealed class TrayApp : ApplicationContext
         _engine = new MonitorEngine(settings);
         _engine.StatusChanged += s => _ui.Post(_ => OnStatus(s), null);
         _engine.Warning += w => _ui.Post(_ => _icon.ShowBalloonTip(5000, "S1 Panel", w, ToolTipIcon.Warning), null);
+        _engine.UnexpectedError += ex => TrayLog.Error("panel drawing", ex);
+        NowPlayingService.Diagnostic += TrayLog.Write;
+        SystemEvents.SessionEnding += (_, e) => TrayLog.Write($"Windows session ending ({e.Reason}).");
         _engine.Start();
 
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
@@ -74,14 +81,15 @@ internal sealed class TrayApp : ApplicationContext
         foreach (var l in LayoutRegistry.All)
         {
             string name = l.Name;
-            _layoutMenu.DropDownItems.Add(new ToolStripMenuItem(char.ToUpper(name[0]) + name[1..], null, (_, _) => Change(s => s.Layout = name)) { Tag = name, ToolTipText = l.Description });
+            _layoutMenu.DropDownItems.Add(new ToolStripMenuItem(char.ToUpper(name[0]) + name[1..], null, (_, _) => Change(s => { s.Layout = name; s.LightsOut = false; })) { Tag = name, ToolTipText = l.Description });
         }
         foreach (string season in new[] { "auto", "winter", "spring", "summer", "autumn" })
         {
             string label = season == "auto" ? "Follow the season" : char.ToUpper(season[0]) + season[1..];
-            _sceneMenu.DropDownItems.Add(new ToolStripMenuItem(label, null, (_, _) => Change(s => { s.Layout = "scene"; s.Scene = season; })) { Tag = season });
+            _sceneMenu.DropDownItems.Add(new ToolStripMenuItem(label, null, (_, _) => Change(s => { s.Layout = "scene"; s.Scene = season; s.LightsOut = false; })) { Tag = season });
         }
 
+        _lightsOut.Click += (_, _) => Change(s => s.LightsOut = !s.LightsOut);
         _pause.Click += (_, _) =>
         {
             if (_engine.IsPaused) _engine.Resume(); else _engine.Pause();
@@ -101,10 +109,11 @@ internal sealed class TrayApp : ApplicationContext
             settingsItem,
             _layoutMenu,
             _sceneMenu,
+            _lightsOut,
             _pause,
             new ToolStripSeparator(),
             _autostart,
-            new ToolStripMenuItem("Exit", null, (_, _) => ExitThread()),
+            new ToolStripMenuItem("Exit", null, (_, _) => { TrayLog.Write("Exit chosen from the tray menu."); ExitThread(); }),
         ]);
         _menu.Opening += (_, _) => RefreshMenu();
     }
@@ -113,9 +122,10 @@ internal sealed class TrayApp : ApplicationContext
     {
         var s = _engine.CurrentSettings;
         foreach (ToolStripMenuItem item in _layoutMenu.DropDownItems)
-            item.Checked = (string)item.Tag! == s.Layout;
+            item.Checked = !s.LightsOut && (string)item.Tag! == s.Layout;
         foreach (ToolStripMenuItem item in _sceneMenu.DropDownItems)
-            item.Checked = s.Layout == "scene" && (string)item.Tag! == s.Scene;
+            item.Checked = !s.LightsOut && s.Layout == "scene" && (string)item.Tag! == s.Scene;
+        _lightsOut.Checked = s.LightsOut;
         _pause.Text = _engine.IsPaused ? "Resume" : "Pause";
         _autostart.Checked = Autostart.IsEnabled;
         _status.Text = _engine.Status.ToString();
@@ -123,6 +133,9 @@ internal sealed class TrayApp : ApplicationContext
 
     private void OnStatus(EngineStatus status)
     {
+        if (_exiting)
+            return; // the engine's final "stopped" arrives after the icon is gone
+
         string text = $"S1 Panel - {status}";
         _icon.Text = text.Length > 127 ? text[..127] : text; // NotifyIcon limit
         _status.Text = status.ToString();
@@ -222,6 +235,7 @@ internal sealed class TrayApp : ApplicationContext
 
     protected override void ExitThreadCore()
     {
+        _exiting = true;
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         LocationService.WindowsLocationUnavailable -= OnLocationUnavailable;
         _watcher?.Dispose();

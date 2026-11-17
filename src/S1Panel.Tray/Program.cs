@@ -38,9 +38,17 @@ internal static class Program
             return 1;
         }
 
+        // Log anything that would otherwise end the app silently. UI-thread exceptions are logged and the app carries on.
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+        Application.ThreadException += (_, e) => TrayLog.Error("UI", e.Exception);
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            TrayLog.Write($"FATAL{(e.IsTerminating ? " (terminating)" : "")}: {e.ExceptionObject}");
+        TaskScheduler.UnobservedTaskException += (_, e) => { TrayLog.Error("background task", e.Exception); e.SetObserved(); };
+
         try
         {
             Application.Run(new TrayApp(Arg("--config")));
+            TrayLog.Write("Exited normally.");
             return 0;
         }
         catch (ArgumentException ex) // unreadable settings file

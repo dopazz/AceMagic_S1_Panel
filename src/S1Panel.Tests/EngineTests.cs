@@ -54,6 +54,19 @@ public class EngineTests
         Assert.True(WaitFor(() => { lock (leds) return leds.Contains("rainbow"); }));
         Assert.Single(writers);
 
+        // Lights Out: blank screen + LEDs off, without losing the chosen layout/LEDs; switching back restores them.
+        var dark = Fast("clock");
+        dark.Led = new LedSettings { Mode = "rainbow" };
+        dark.LightsOut = true;
+        engine.UpdateSettings(dark);
+        Assert.True(WaitFor(() => engine.Status.Message.StartsWith("blank")), $"not blank: {engine.Status}");
+        Assert.True(WaitFor(() => { lock (leds) return leds.LastOrDefault() == "off"; }));
+        Assert.Equal("clock", engine.CurrentSettings.Layout);
+        dark.LightsOut = false;
+        engine.UpdateSettings(dark);
+        Assert.True(WaitFor(() => engine.Status.Message.StartsWith("clock")));
+        Assert.True(WaitFor(() => { lock (leds) return leds.LastOrDefault() == "rainbow"; }));
+
         // Orientation change reopens the panel (new session = orientation command + full redraw).
         var p = Fast("clock");
         p.Orientation = "portrait";

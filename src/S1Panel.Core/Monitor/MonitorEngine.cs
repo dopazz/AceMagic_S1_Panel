@@ -47,6 +47,9 @@ public sealed class MonitorEngine : IDisposable
     /// <summary>Raised on the engine thread when applying LED settings fails (the panel keeps running).</summary>
     public event Action<string>? Warning;
 
+    /// <summary>Raised on the engine thread when drawing a frame throws something unexpected (a bug); the engine retries.</summary>
+    public event Action<Exception>? UnexpectedError;
+
     public EngineStatus Status { get; private set; } = new(EngineState.Stopped, "");
 
     public MonitorEngine(PanelSettings settings, Func<PanelSettings, LcdPanel>? openPanel = null, Action<LedSettings>? applyLed = null)
@@ -146,7 +149,7 @@ public sealed class MonitorEngine : IDisposable
                 bool paused, reconnect;
                 lock (_gate)
                 {
-                    s = _settings;
+                    s = _settings.Effective();
                     version = _version;
                     paused = _paused;
                     reconnect = _reconnect;
@@ -247,6 +250,13 @@ public sealed class MonitorEngine : IDisposable
                 {
                     CloseSession();
                     SetStatus(EngineState.Error, $"{ex.Message.Split('\n')[0]} (retrying)");
+                    Wait(2000);
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException && !ct.IsCancellationRequested)
+                {
+                    // A bug in a layout/widget must not take the whole app down: report it and keep going.
+                    UnexpectedError?.Invoke(ex);
+                    SetStatus(EngineState.Error, $"Drawing failed: {ex.Message.Split('\n')[0]} (retrying)");
                     Wait(2000);
                 }
             }

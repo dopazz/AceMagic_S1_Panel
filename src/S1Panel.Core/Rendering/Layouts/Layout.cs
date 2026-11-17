@@ -50,6 +50,17 @@ public static class LayoutExtensions
     };
 }
 
+/// <summary>
+/// Plain black. The panel has no command to switch its backlight off, so this is the closest to "off":
+/// after the first frame nothing changes, so nothing is sent except the once-a-second heartbeat.
+/// </summary>
+public sealed class BlankLayout : ILayout
+{
+    public string Name => "blank";
+    public string Description => "Black screen (the panel has no off switch; the backlight stays on)";
+    public void Draw(SKCanvas canvas, LayoutContext ctx) => canvas.Clear(SKColors.Black);
+}
+
 public static class LayoutRegistry
 {
     public static IReadOnlyList<ILayout> All { get; } =
@@ -60,6 +71,7 @@ public static class LayoutRegistry
         new SceneLayout(),
         new SplitLayout(),
         new DashboardLayout(),
+        new BlankLayout(),
     ];
 
     /// <summary>The shared catalogue instance (for names/descriptions/validation). Use <see cref="Create"/> to draw.</summary>

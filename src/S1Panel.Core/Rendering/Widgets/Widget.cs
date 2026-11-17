@@ -39,6 +39,9 @@ public static class WidgetRegistry
         ("weather", "Current weather and a 3-day forecast (Open-Meteo)", () => new WeatherWidget()),
         ("sun-moon", "Sunrise, sunset, daylight and the moon phase", () => new SunMoonWidget()),
         ("photos", "Slideshow of pictures from a folder", () => new PhotoWidget()),
+        ("now-playing", "Album art, title, artist and progress of the music or video playing", () => new NowPlayingWidget()),
+        ("robot", "An animated robot buddy whose mood follows the CPU load", () => new RobotWidget()),
+        ("hamster", "An animated hamster whose wheel spins with the CPU load", () => new HamsterWidget()),
     ];
 
     public static IEnumerable<(string Name, string Description)> All => Entries.Select(e => (e.Name, e.Description));

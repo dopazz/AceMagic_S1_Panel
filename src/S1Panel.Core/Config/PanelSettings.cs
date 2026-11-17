@@ -88,6 +88,24 @@ public sealed class PanelSettings
     /// <summary>LED strip settings, or null to leave the LEDs alone.</summary>
     public LedSettings? Led { get; set; }
 
+    /// <summary>
+    /// "Lights Out": show the blank layout and switch the LED strip off, without touching <see cref="Layout"/> or
+    /// <see cref="Led"/>, so turning it off again restores both. (With no LED settings the strip can't be restored
+    /// automatically and stays off.)
+    /// </summary>
+    public bool LightsOut { get; set; }
+
+    /// <summary>The settings the panel should actually use: these, or with <see cref="LightsOut"/> applied.</summary>
+    public PanelSettings Effective()
+    {
+        if (!LightsOut)
+            return this;
+        var s = SettingsStore.Clone(this);
+        s.Layout = "blank";
+        s.Led = new LedSettings { Mode = "off", Port = Led?.Port };
+        return s;
+    }
+
     /// <summary>HID device path, or null to auto-detect.</summary>
     public string? Device { get; set; }
 
