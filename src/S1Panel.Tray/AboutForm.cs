@@ -90,13 +90,13 @@ internal sealed class AboutForm : Form
         return plus < 0 ? v : $"{v[..plus]} ({v[(plus + 1)..Math.Min(v.Length, plus + 8)]})";
     }
 
-    /// <summary>When this exe was built, in local time (the BuildTimestamp the project stamps in, in UTC).</summary>
+    /// <summary>When this exe was built, in UTC: "2026-11-17 17:09 UTC" (the BuildTimestamp the project stamps in).</summary>
     internal static string BuildText()
     {
         string? stamp = typeof(AboutForm).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
             .FirstOrDefault(a => a.Key == "BuildTimestamp")?.Value;
         return DateTimeOffset.TryParse(stamp, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var t)
-            ? t.ToLocalTime().ToString("f", CultureInfo.CurrentCulture)
+            ? t.UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture)
             : "unknown";
     }
 

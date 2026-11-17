@@ -15,5 +15,4 @@ claude/dump_original/
 claude/previews/
 
 # packaging output (packaging\windows.cmd)
-packaging/windows/
-packaging/src/
+zip_distribution/

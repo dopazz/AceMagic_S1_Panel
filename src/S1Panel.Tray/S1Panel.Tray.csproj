@@ -36,7 +36,7 @@
     <ProjectReference Include="..\S1Panel.Core\S1Panel.Core.csproj" />
   </ItemGroup>
 
-  <!-- the build time shown in About (UTC; shown in local time) -->
+  <!-- the build time shown in About, in UTC -->
   <ItemGroup>
     <AssemblyMetadata Include="BuildTimestamp" Value="$([System.DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))" />
   </ItemGroup>

@@ -13,10 +13,10 @@ rem Developed with Claude Code (Claude Opus 5.5).
 
 rem packaging\windows.cmd -- the distribution package:
 rem
-rem   packaging\windows\s1panel-windows-x64.zip   an S1Panel\ folder with
+rem   zip_distribution\s1panel-windows-x64.zip   an S1Panel\ folder with
 rem       s1panel-tray.exe, s1panel.exe, README.txt, LICENSE, licenses\
 rem       and s1panel-source.zip
-rem   packaging\src\s1panel-source.zip            the source on its own
+rem   zip_distribution\s1panel-source.zip        the source on its own
 rem
 rem It runs the tests, then publishes both programs self-contained (no .NET
 rem needed on the PC that runs them).  Needs the .NET 10 SDK.  The source
@@ -52,13 +52,13 @@ copy /y packaging\licenses\* "%D%\licenses\" >nul || exit /b 1
 copy /y LICENSE "%D%\licenses\LICENSE-s1panel.txt" >nul || exit /b 1
 copy /y CREDITS.md "%D%\licenses\" >nul || exit /b 1
 
-if not exist packaging\windows mkdir packaging\windows
-if not exist packaging\src mkdir packaging\src
-if exist packaging\windows\s1panel-windows-x64.zip del packaging\windows\s1panel-windows-x64.zip
-"%TAR%" -a -c -f packaging\windows\s1panel-windows-x64.zip -C "%ST%" S1Panel || exit /b 1
-copy /y "%D%\s1panel-source.zip" packaging\src\ >nul || exit /b 1
+set "OUT=zip_distribution"
+if not exist "%OUT%" mkdir "%OUT%"
+if exist "%OUT%\s1panel-windows-x64.zip" del "%OUT%\s1panel-windows-x64.zip"
+"%TAR%" -a -c -f "%OUT%\s1panel-windows-x64.zip" -C "%ST%" S1Panel || exit /b 1
+copy /y "%D%\s1panel-source.zip" "%OUT%\" >nul || exit /b 1
 rem the staging folder can stay locked for a moment (a virus scan of the
 rem fresh exes): try again once, and otherwise leave it for the next run
 rmdir /s /q "%ST%" 2>nul || (ping -n 3 127.0.0.1 >nul & rmdir /s /q "%ST%" 2>nul)
-echo packaging\windows\s1panel-windows-x64.zip
-echo packaging\src\s1panel-source.zip
+echo %CD%\%OUT%\s1panel-windows-x64.zip
+echo %CD%\%OUT%\s1panel-source.zip

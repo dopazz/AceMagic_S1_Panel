@@ -29,6 +29,34 @@ delete the folder.
 Weather comes from Open-Meteo (open-meteo.com, CC BY 4.0).  Only your
 location's coordinates, or the place name you type, are sent.
 
+Why are the programs so big?
+
+s1panel-tray.exe is about 63 MB and s1panel.exe about 50 MB.  They hold
+no debug symbols: almost all of the size is .NET itself.
+
+A design goal of S1 Panel is that it runs without administrator rights.
+Installing the .NET runtime needs administrator rights, so instead each
+program carries its own private copy of .NET built in.  Nothing has to
+be installed, and each program is a single file rather than a folder of
+a couple of hundred small ones.  Inside, about 146 MB of files are
+compressed into the exe and unpacked when it starts.  The largest:
+
+  Component                          Size    What it is
+  ---------------------------------  ------  ------------------------------
+  Microsoft.Windows.SDK.NET.dll      24 MB   the bridge to newer Windows
+                                             features: Now Playing and
+                                             Windows location need it
+  System.Private.CoreLib.dll         15 MB   the core of .NET
+  System.Windows.Forms.dll, with     22 MB   the tray menu and the Settings
+    its Design and Primitives parts          and About windows
+  libSkiaSharp.dll                   12.5 MB the graphics library that
+                                             draws everything on the panel
+  coreclr, clrjit, XML, LINQ,        the     the remaining parts of .NET
+    cryptography, data and more      rest
+
+s1panel.exe carries its own copy of nearly all of this too, which is
+why the download is about 100 MB.
+
 Support
 
 If S1 Panel is useful to you, you can buy me a coffee:
