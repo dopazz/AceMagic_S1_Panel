@@ -8,11 +8,8 @@ publish/
 .vs/
 bin_out/
 
-# claude/ working files that shouldn't be versioned
-# vendor app dump: copyrighted assets + the vulnerable WinRing0 driver (regenerate with claude/scripts + claude/tools)
-claude/dump_original/
-# rendered preview PNGs: regenerate any time with `s1panel ... --preview <file>`
-claude/previews/
+# private working notes, scripts and the vendor app dump: kept local, not published
+claude/
 
 # packaging output (packaging\windows.cmd)
 zip_distribution/

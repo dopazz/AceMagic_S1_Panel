@@ -139,7 +139,7 @@ Develop without hardware by adding `--preview out.png` to any LCD command. It wr
 | `S1Panel.Cli` | `s1panel.exe` command line |
 | `S1Panel.Tray` | `s1panel-tray.exe`: notification-area app and settings window (WinForms) |
 
-Protocol notes are in `claude/NOTES.md`. The protocol was learned from the GPL-3 project in `example/`, and this code is a fresh implementation.
+The protocol was learned from tjaworski's GPL-3 project [AceMagic-S1-LED-TFT-Linux](https://github.com/tjaworski/AceMagic-S1-LED-TFT-Linux), and this code is a fresh implementation.
 
 ## Tuning knobs (if the panel misbehaves)
 
